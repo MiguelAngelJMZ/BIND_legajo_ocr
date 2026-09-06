@@ -509,7 +509,7 @@ y v2 con `__END_AT = NULL`; `chunks` → apuntando al nuevo `id_version`.
 
 ## 11. Estado, pendientes y decisiones de negocio
 
-### ✅ Construido y validado end-to-end (workspaces `bind` y `fe-sandbox-serverless`)
+### ✅ Construido y validado end-to-end
 - Pipeline completo bronze→silver→gold (parseo, resolución, gate, extracción, vigencias,
   versionado, chunking) sobre datos simulados.
 - Índice de Vector Search con **incrementalidad probada** (solo re-embebe el delta).
