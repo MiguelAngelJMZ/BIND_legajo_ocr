@@ -3,8 +3,6 @@
 **Cliente:** BIND · **Tipo:** Prueba de Concepto (POC) · **Fecha:** 2026-09
 
 Este documento explica **qué construimos, cómo funciona y cómo se ejecuta** la solución.
-Está pensado para que alguien del lado del cliente —técnico o de negocio— entienda el flujo
-completo sin haber estado en las sesiones de desarrollo.
 
 ---
 
