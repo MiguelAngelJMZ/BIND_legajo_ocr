@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Legajo Lakehouse — BIND",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "ingesta-pipeline",
+        "label": "Ingesta y comprensión",
+        "focus": ["sources", "vol_docs", "lakeflow", "versiones", "chunks"],
+        "note": "Recorrido principal: binarios PDF → OCR + IA → tablas Delta versionadas."
+      },
+      {
+        "id": "circuito-renovacion",
+        "label": "Circuito de renovación",
+        "focus": ["app", "vol_staging", "lakeflow", "versiones"],
+        "note": "El cliente sube el nuevo documento; Base Clientes lo aprueba; el pipeline cierra la versión anterior en SCD2."
+      },
+      {
+        "id": "busqueda-semantica",
+        "label": "Búsqueda semántica",
+        "focus": ["chunks", "vector_search"],
+        "note": "Los chunks vigentes se sincronizan de forma incremental al índice vectorial con embeddings qwen3."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Fuentes documentales",
+      "sublabel": "Complif · Netcontent · Drive",
+      "pos": [40, 290],
+      "size": [140, 60]
+    },
+    {
+      "id": "vol_docs",
+      "type": "cloud",
+      "label": "Volume documentación",
+      "sublabel": "Unity Catalog · binarios PDF",
+      "brand": "databricks",
+      "pos": [250, 290],
+      "size": [145, 60]
+    },
+    {
+      "id": "lakeflow",
+      "type": "backend",
+      "label": "Lakeflow Pipeline",
+      "sublabel": "Serverless · OCR + IA · streaming",
+      "brand": "databricks",
+      "pos": [460, 200],
+      "size": [155, 80]
+    },
+    {
+      "id": "versiones",
+      "type": "database",
+      "label": "versiones",
+      "sublabel": "SCD2 · historial auditable",
+      "brand": "databricks",
+      "pos": [690, 110],
+      "size": [145, 60]
+    },
+    {
+      "id": "chunks",
+      "type": "database",
+      "label": "chunks",
+      "sublabel": "SCD1 · fuente del índice",
+      "brand": "databricks",
+      "pos": [690, 270],
+      "size": [145, 60]
+    },
+    {
+      "id": "cola_revision",
+      "type": "database",
+      "label": "cola_revision",
+      "sublabel": "documentos sin entidad resuelta",
+      "brand": "databricks",
+      "pos": [690, 420],
+      "size": [145, 60]
+    },
+    {
+      "id": "vector_search",
+      "type": "database",
+      "label": "Vector Search",
+      "sublabel": "Delta Sync · qwen3 · español",
+      "brand": "databricks",
+      "pos": [890, 190],
+      "size": [145, 60]
+    },
+    {
+      "id": "lakebase",
+      "type": "database",
+      "label": "Lakebase",
+      "sublabel": "Postgres · OLTP",
+      "brand": "postgresql",
+      "pos": [40, 120],
+      "size": [145, 60]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "Databricks App",
+      "sublabel": "Portal cliente · Base Clientes",
+      "brand": "databricks",
+      "pos": [40, 480],
+      "size": [145, 70]
+    },
+    {
+      "id": "vol_staging",
+      "type": "cloud",
+      "label": "Volume staging",
+      "sublabel": "subidas pendientes",
+      "brand": "databricks",
+      "pos": [250, 480],
+      "size": [145, 60]
+    },
+    {
+      "id": "unity_catalog",
+      "type": "security",
+      "label": "Unity Catalog",
+      "sublabel": "gobierno · permisos · linaje",
+      "brand": "databricks",
+      "pos": [460, 480],
+      "size": [145, 60]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Databricks Workspace",
+      "wraps": ["vol_docs", "lakeflow", "versiones", "chunks", "cola_revision", "vector_search", "vol_staging", "unity_catalog", "lakebase", "app"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ingesta",
+      "from": "sources",
+      "to": "vol_docs",
+      "label": "ingesta PDF",
+      "variant": "emphasis"
+    },
+    {
+      "id": "vol-to-pipeline",
+      "from": "vol_docs",
+      "to": "lakeflow",
+      "label": "binary · streaming",
+      "labelAt": [358, 242]
+    },
+    {
+      "id": "pipeline-to-versiones",
+      "from": "lakeflow",
+      "to": "versiones",
+      "label": "AUTO CDC · SCD2",
+      "labelAt": [620, 168]
+    },
+    {
+      "id": "pipeline-to-chunks",
+      "from": "lakeflow",
+      "to": "chunks",
+      "label": "chunking · SCD1",
+      "labelAt": [582, 294]
+    },
+    {
+      "id": "pipeline-to-cola",
+      "from": "lakeflow",
+      "to": "cola_revision",
+      "label": "sin dueño resuelto",
+      "variant": "dashed",
+      "labelAt": [620, 380]
+    },
+    {
+      "id": "chunks-to-vs",
+      "from": "chunks",
+      "to": "vector_search",
+      "label": "Delta Sync incremental",
+      "variant": "emphasis",
+      "labelAt": [808, 246]
+    },
+    {
+      "id": "app-to-staging",
+      "from": "app",
+      "to": "vol_staging",
+      "label": "cliente sube PDF",
+      "variant": "dashed",
+      "labelAt": [228, 468]
+    },
+    {
+      "id": "staging-to-pipeline",
+      "from": "vol_staging",
+      "to": "lakeflow",
+      "label": "aprobar · reprocesar",
+      "labelAt": [370, 416]
+    },
+    {
+      "id": "app-to-lakebase",
+      "from": "app",
+      "to": "lakebase",
+      "label": "estado del workflow",
+      "fromSide": "left",
+      "toSide": "left",
+      "via": [[-30, 515], [-30, 150]]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "OCR + IA sin plantillas",
+      "items": [
+        "ai_parse_document: extrae texto de cada PDF",
+        "ai_classify: tipo de documento por contenido",
+        "ai_extract: fechas de emisión y vencimiento",
+        "Gate contra maestro de personas_juridicas"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Incrementalidad garantizada",
+      "items": [
+        "Bronze streaming: parsea solo archivos nuevos",
+        "SCD2 versiona (cuit, tipo_documento) automáticamente",
+        "CDF real → VS sincroniza solo el delta de chunks",
+        "Chunks huérfanos retirados con APPLY AS DELETE"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Circuito de renovación cerrado",
+      "items": [
+        "Solicitud creada al detectar documento vencido",
+        "Cliente sube versión nueva desde el portal",
+        "Base Clientes aprueba → binario promovido al Volume",
+        "Pipeline reprocesa → versión anterior reemplazada en SCD2"
+      ]
+    }
+  ]
+}

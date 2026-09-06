@@ -1,0 +1,25 @@
+# Databricks bundle — state y binarios de terraform
+.databricks/bundle/*/terraform/
+.databricks/bundle/*/bin/
+
+# PDFs generados (se regeneran con generar_documentos.py)
+docs_simulados/out/
+
+# Backups de sed
+fase3/app/app.yaml.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Archify visual-check (artefactos temporales de validación)
+*.visual-check.*
+
+# macOS
+.DS_Store
+
+# Entornos locales
+.env

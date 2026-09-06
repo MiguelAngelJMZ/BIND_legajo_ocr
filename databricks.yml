@@ -1,0 +1,62 @@
+# =============================================================================
+# Databricks Asset Bundle · Legajo Lakehouse (POC)
+# Despliega el Lakeflow Declarative Pipeline (bronze -> silver -> gold/chunks).
+# El setup del catálogo y el índice Vector Search se corren aparte (one-time).
+#
+# CONFIGURACIÓN EN UN SOLO LUGAR: catálogo, schema y volumen se definen abajo en
+# `variables`. El pipeline los toma de ahí y las tablas del pipeline usan nombres
+# SIN CALIFICAR (resuelven al catalog/schema configurado). Para llevarlo a otro
+# entorno, cambiá los defaults acá o pasá --var:
+#   databricks bundle deploy -p <perfil> -t bind \
+#     --var="catalog=mi_catalogo" --var="schema=mi_schema" --var="docs_volume=documentacion"
+#
+#   databricks bundle validate -p <perfil>
+#   databricks bundle deploy   -p <perfil> -t bind
+#   databricks bundle run legajos_pipeline -p <perfil> -t bind
+# =============================================================================
+bundle:
+  name: bind_ocr_legajos
+
+variables:
+  catalog:
+    description: Catálogo Unity Catalog destino.
+    default: bind_ocr
+  schema:
+    description: Schema destino.
+    default: legajos
+  docs_volume:
+    description: Nombre del Volume donde llegan los binarios.
+    default: documentacion
+
+targets:
+  bind:
+    workspace:
+      host: https://fe-sandbox-classic-sandbox-f6jfcb.cloud.databricks.com
+
+  fe-sandbox-serverless:
+    workspace:
+      host: https://fe-sandbox-serverless-sandbox-f1k2af.cloud.databricks.com
+
+resources:
+  pipelines:
+    legajos_pipeline:
+      name: bind_ocr_legajos_pipeline
+      catalog: ${var.catalog}
+      schema: ${var.schema}
+      serverless: true
+      continuous: false
+      photon: true
+      # Se inyecta al pipeline y el SQL de bronze la lee como ${docs_volume_path}.
+      configuration:
+        docs_volume_path: /Volumes/${var.catalog}/${var.schema}/${var.docs_volume}/
+      libraries:
+        - file:
+            path: src/pipeline/01_bronze_parseo.sql
+        - file:
+            path: src/pipeline/02_silver_resolucion.sql
+        - file:
+            path: src/pipeline/03_silver_extraccion.sql
+        - file:
+            path: src/pipeline/04_gold_chunks.py
+        - file:
+            path: src/pipeline/05_gold_chunks_cdc.sql

@@ -1,0 +1,20 @@
+# Databricks Apps enruta al puerto de $DATABRICKS_APP_PORT: hay que escuchar ahí.
+command: ["sh", "-c", "streamlit run app.py --server.port $DATABRICKS_APP_PORT --server.address 0.0.0.0 --server.headless true"]
+
+env:
+  - name: PIPELINE_ID
+    value: "2af92040-392f-4b77-8062-3e1a8e4b63e7"
+  - name: VOL_STAGING
+    value: "/Volumes/bind_ocr/legajos/staging"
+  - name: VOL_DOCS
+    value: "/Volumes/bind_ocr/legajos/documentacion"
+  - name: DATABRICKS_DATABASE_INSTANCE
+    value: "bind_ocr"
+  - name: PGHOST
+    value: "ep-rough-breeze-d8vyqp2z.database.us-east-2.cloud.databricks.com"
+  - name: PGDATABASE
+    value: "databricks_postgres"
+  - name: PGSSLMODE
+    value: "require"
+  # PGUSER se deriva dinámicamente en app.py (w.current_user.me()) para soportar
+  # tanto ejecución local (usuario humano) como app (service principal).
