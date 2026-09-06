@@ -54,7 +54,7 @@ circuito de aprobación operativo.
 
 ## 2. Diagrama de arquitectura
 
-> Diagrama interactivo (dark/light, búsqueda semántica, vistas guiadas): **[ábrelo aquí](https://htmlpreview.github.io/?https://github.com/MiguelAngelJMZ/BIND_legajo_ocr/blob/main/legajo-lakehouse.html)** o descargá `legajo-lakehouse.html` y abrilo localmente.
+> Diagrama interactivo (dark/light, búsqueda semántica, vistas guiadas): **[ábrelo aquí](https://htmlpreview.github.io/?https://github.com/MiguelAngelJMZ/BIND_legajo_ocr/blob/main/legajo-lakehouse.html)** o descarga `legajo-lakehouse.html` y abrilo localmente.
 
 ![Arquitectura Legajo Lakehouse](docs/diagram.png)
 
