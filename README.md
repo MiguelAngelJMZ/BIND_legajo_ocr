@@ -523,7 +523,6 @@ y v2 con `__END_AT = NULL`; `chunks` → apuntando al nuevo `id_version`.
 - **Portal de subida real** del cliente (hoy simulado dentro de la app).
 - **Bandeja de revisión de `cola_revision`**: los documentos sin CUIT resuelto quedan registrados en la tabla pero no tienen flujo operativo. Falta una UI para que un operador asigne manualmente la entidad correcta y reingrese el documento al pipeline.
 - **FinOps** con `system.billing.usage` + *usage policies*.
-- **Orquestación**: Job con *file-arrival trigger* o schedule (hoy se dispara manual / al aprobar).
 
 ### 🔴 Decisiones a cerrar con negocio / seguridad
 1. **Identidad del cliente externo (riesgo #1):** Databricks Apps no admite usuarios externos
