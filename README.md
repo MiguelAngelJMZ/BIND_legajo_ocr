@@ -303,14 +303,6 @@ solucion/
 
 ## 9. Decisiones de diseño clave
 
-**¿Por qué streaming tables y no Materialized Views?**
-Las MV de Lakeflow **no exponen Change Data Feed** (`table_changes` falla con
-`MATERIALIZED_VIEW_UNSUPPORTED_OPERATION`) y **se sobrescriben enteras** en cada refresh. Eso
-rompe el sync incremental de Vector Search (re-embeberían todo el corpus cada vez). Por eso todo
-el camino de retrieval son **streaming tables + AUTO CDC**: `versiones` en **SCD2** (historial
-auditable) y `chunks` en **SCD1** (upsert por chunk → CDF real → VS sincroniza solo el delta).
-*Comprobado empíricamente durante el POC.*
-
 **Definición de "documento único".** El documento lógico se define por `(cuit, tipo_documento)`:
 una versión vigente por entidad y por tipo; una versión nueva reemplaza a la anterior.
 
@@ -327,29 +319,7 @@ entre sí — caso claro: `estados_contables` (el balance 2024 y el 2025 son dis
 versiones). Para esos tipos hay que **enriquecer la clave** (agregar ejercicio/`fecha_emision`
 o un id de documento). Es parte del catálogo de tipos de documento a definir con negocio.
 
-**Retiro de chunks huérfanos.** Cuando una versión nueva produce **menos** chunks que la
-anterior, los slots sobrantes quedaban colgados en el índice con el estado viejo. `chunks_stream`
-emite, además de los chunks reales (`_op='upsert'`), eventos de retiro (`_op='delete'`) para los
-slots `[N, MAX_SLOTS)`, y el AUTO CDC (`APPLY AS DELETE WHEN _op='delete'`) los borra.
 
-**Otros gotchas resueltos:**
-- **`MANAGED LOCATION`**: solo requerida en algunos sandboxes *clásicos*. Los workspaces serverless
-  con metastore de cuenta usan la ubicación por defecto; `CREATE CATALOG` sin `MANAGED LOCATION`
-  funciona. Si el workspace la requiere, descomentar la línea en `01_setup_catalogo.sql` y ajustar
-  la ruta S3/ABFS.
-- Cambiar el tipo de un dataset (MV→streaming) exige `DROP` previo + `--full-refresh-all`.
-- `APPLY CHANGES` SCD2 no soporta columnas `VARIANT` (falla en `<=>`): no arrastrar
-  `parsed_content` a la fuente del AUTO CDC.
-- Databricks Apps enruta al puerto `$DATABRICKS_APP_PORT` (=8000), no 8501.
-- **`databricks apps deploy --source-code-path`** requiere el prefijo `/Workspace/` completo
-  (ej: `/Workspace/Users/tu@email.com/mi-app`). Sin el prefijo la CLI devuelve
-  *"Source code path must be a valid workspace path"*.
-- **Permisos UC del service principal de la app:** para acceder a los Volumes vía Files API el SP
-  necesita `USE_CATALOG`, `USE_SCHEMA`, `READ_VOLUME` y `WRITE_VOLUME` en la jerarquía
-  catálogo → schema → volume. El script `deploy.sh` los otorga automáticamente post-deploy.
-- **`PGUSER` en la app:** cuando la app corre como service principal, el usuario Postgres es el
-  `applicationId` del SP (UUID), no el email del desarrollador. `app.py` deriva el usuario con
-  `w.current_user.me().user_name` para que funcione en ambos contextos (local y app).
 
 ---
 
