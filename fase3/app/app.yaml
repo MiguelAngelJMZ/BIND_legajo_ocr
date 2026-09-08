@@ -10,6 +10,12 @@ env:
     value: "/Volumes/bind_ocr/legajos/documentacion"
   - name: DATABRICKS_DATABASE_INSTANCE
     value: "bind_ocr"
+  - name: CATALOG
+    value: "bind_ocr"
+  - name: SCHEMA
+    value: "legajos"
+  - name: WAREHOUSE_ID
+    value: "b59432616c8f8bd1"
   - name: PGHOST
     value: "ep-rough-breeze-d8vyqp2z.database.us-east-2.cloud.databricks.com"
   - name: PGDATABASE

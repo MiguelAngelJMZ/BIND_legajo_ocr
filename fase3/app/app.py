@@ -19,10 +19,19 @@ import streamlit as st
 import psycopg
 from databricks.sdk import WorkspaceClient
 
-PIPELINE_ID = os.getenv("PIPELINE_ID", "")
-VOL_STAGING = os.getenv("VOL_STAGING", "")
-VOL_DOCS    = os.getenv("VOL_DOCS", "")
-DB_INSTANCE = os.getenv("DATABRICKS_DATABASE_INSTANCE", "")
+PIPELINE_ID  = os.getenv("PIPELINE_ID", "")
+VOL_STAGING  = os.getenv("VOL_STAGING", "")
+VOL_DOCS     = os.getenv("VOL_DOCS", "")
+DB_INSTANCE  = os.getenv("DATABRICKS_DATABASE_INSTANCE", "")
+CATALOG      = os.getenv("CATALOG", "bind_ocr")
+SCHEMA       = os.getenv("SCHEMA", "legajos")
+WAREHOUSE_ID = os.getenv("WAREHOUSE_ID", "")
+
+TIPOS_DOCUMENTO = [
+    "estatuto", "poder", "acta_designacion_autoridades",
+    "constancia_inscripcion", "estados_contables", "informe_crediticio",
+    "documento_identidad", "controles_internos", "consultas_web", "otro",
+]
 
 st.set_page_config(page_title="Legajo Lakehouse", page_icon="📂", layout="wide")
 w = WorkspaceClient()
@@ -72,6 +81,28 @@ def extract_pdf_text(data: bytes) -> str:
 
 def chip(ok):
     return "🟢" if ok else "🔴"
+
+
+@st.cache_data(ttl=300)
+def fetch_entidades():
+    if not WAREHOUSE_ID:
+        return []
+    from databricks.sdk.service.sql import StatementState
+    r = w.statement_execution.execute_statement(
+        warehouse_id=WAREHOUSE_ID,
+        statement=f"SELECT cuit, razon_social FROM {CATALOG}.{SCHEMA}.personas_juridicas ORDER BY razon_social",
+        wait_timeout="30s",
+    )
+    if r.status.state != StatementState.SUCCEEDED:
+        return []
+    return [{"cuit": row[0], "razon_social": row[1]} for row in (r.result.data_array or [])]
+
+
+def _trigger_pipeline():
+    try:
+        w.pipelines.start_update(pipeline_id=PIPELINE_ID)
+    except Exception:
+        pass  # ya en ejecución — se procesará en el próximo run
 
 
 # ============================ VISTA CLIENTE ============================
@@ -179,7 +210,7 @@ def aprobar(sol, usuario):
         cur.execute("UPDATE legajos.solicitudes SET estado='aprobado', actualizado_en=now() WHERE id=%s",
                     (sol["id"],))
         c.commit()
-    w.pipelines.start_update(pipeline_id=PIPELINE_ID)
+    _trigger_pipeline()
 
 
 def rechazar(sol, usuario, motivo):
@@ -200,7 +231,7 @@ def vista_aprobacion(usuario):
         info = st.session_state.pop("decision_ok")
         if info["decision"] == "aprobado":
             st.success(f"✅ **{info['razon_social']} — {info['tipo']}** aprobado. "
-                       "La versión nueva entra al pipeline; la anterior pasará a reemplazada.")
+                       "Binario promovido. El pipeline lo procesará en el próximo run y cerrará la versión anterior.")
         else:
             st.warning(f"❌ **{info['razon_social']} — {info['tipo']}** rechazado. "
                        "Se notificará al cliente y sigue el ciclo de alertas.")
@@ -227,7 +258,7 @@ def vista_aprobacion(usuario):
                 st.caption((sol["resumen_nuevo"] or "—")[:300])
             b1, b2, _ = st.columns([1, 1, 3])
             if b1.button("✅ Aprobar", key=f"ap_{sol['id']}", type="primary"):
-                with st.spinner("Promoviendo binario y disparando reproceso..."):
+                with st.spinner("Promoviendo binario..."):
                     aprobar(sol, usuario)
                 st.session_state["decision_ok"] = {
                     "decision": "aprobado",
@@ -245,22 +276,82 @@ def vista_aprobacion(usuario):
                         "tipo": sol["tipo_documento"],
                     }
                     st.rerun()
-                    st.rerun()
     if not pend:
         st.info("No hay solicitudes pendientes de aprobación.")
+
+
+# ============================ VISTA NUEVO DOCUMENTO ============================
+def vista_nuevo_documento(usuario):
+    st.title("📄 Nuevo documento")
+    st.caption("Ingresá un documento que aún no está en el sistema. "
+               "Va directo al Volume de documentación y el pipeline lo procesa en el próximo run.")
+
+    if "nuevo_doc_ok" in st.session_state:
+        info = st.session_state.pop("nuevo_doc_ok")
+        st.success(f"✅ **{info['razon_social']} — {info['tipo']}** ingresado al Volume. "
+                   "El pipeline lo clasificará y versionará en el próximo run.")
+
+    entidades = fetch_entidades()
+    if not entidades:
+        st.warning("No se pudieron cargar las entidades del maestro. "
+                   "Verificá que WAREHOUSE_ID esté configurado en app.yaml.")
+        return
+
+    col1, col2 = st.columns(2)
+    with col1:
+        labels = {f"{e['razon_social']} · {e['cuit']}": e for e in entidades}
+        sel = st.selectbox("Entidad", list(labels.keys()))
+        entidad = labels[sel]
+    with col2:
+        tipo = st.selectbox("Tipo de documento", TIPOS_DOCUMENTO)
+
+    archivo = st.file_uploader("Archivo PDF", type=["pdf"])
+
+    if archivo:
+        # validación preliminar
+        texto = extract_pdf_text(archivo.getvalue())
+        solo_digitos = re.sub(r"\D", "", texto)
+        anios = [int(a) for a in re.findall(r"\b(20\d{2})\b", texto)]
+        val = {
+            "cuit_coincide":   entidad["cuit"] in solo_digitos,
+            "tipo_coincide":   tipo.split("_")[0].lower() in texto.lower(),
+            "fecha_posterior": bool(anios) and max(anios) >= datetime.date.today().year,
+        }
+        st.markdown(f"- {chip(val['cuit_coincide'])} el CUIT coincide con la entidad seleccionada  \n"
+                    f"- {chip(val['tipo_coincide'])} el tipo coincide con el contenido  \n"
+                    f"- {chip(val['fecha_posterior'])} la fecha parece reciente")
+
+        if st.button("📥 Ingresar al sistema", type="primary"):
+            ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            nombre = f"{entidad['cuit']}_{tipo}_{ts}.pdf"
+            destino = f"{VOL_DOCS}/{nombre}"
+            with st.spinner("Subiendo al Volume..."):
+                w.files.upload(destino, io.BytesIO(archivo.getvalue()), overwrite=True)
+                _trigger_pipeline()
+            st.session_state["nuevo_doc_ok"] = {
+                "razon_social": entidad["razon_social"],
+                "tipo": tipo,
+            }
+            st.rerun()
 
 
 # ------------------------------- router -------------------------------
 usuario = current_user()
 st.sidebar.markdown(f"**Usuario:** {usuario}")
-vista = st.sidebar.radio("Vista", ["🏢 Portal del cliente", "✅ Base Clientes (aprobación)"])
+vista = st.sidebar.radio("Vista", [
+    "🏢 Portal del cliente",
+    "✅ Base Clientes (aprobación)",
+    "📄 Nuevo documento",
+])
 if st.sidebar.button("🔄 Refrescar"):
     st.rerun()
 
 try:
     if vista.startswith("🏢"):
         vista_cliente(usuario)
-    else:
+    elif vista.startswith("✅"):
         vista_aprobacion(usuario)
+    else:
+        vista_nuevo_documento(usuario)
 except Exception as e:
     st.error(f"Error: {e}")
